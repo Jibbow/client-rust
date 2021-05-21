@@ -2,7 +2,7 @@
 
 use crate::Error;
 use std::fmt::Display;
-use tikv_client_proto::kvrpcpb;
+use tikv_client_proto::{coprocessor_v2 as coprv2pb, kvrpcpb};
 
 pub trait HasRegionError {
     fn region_error(&mut self) -> Option<Error>;
@@ -53,6 +53,7 @@ has_region_error!(kvrpcpb::RawDeleteRangeResponse);
 has_region_error!(kvrpcpb::RawScanResponse);
 has_region_error!(kvrpcpb::RawBatchScanResponse);
 has_region_error!(kvrpcpb::RawCasResponse);
+has_region_error!(coprv2pb::RawCoprocessorResponse);
 
 macro_rules! has_key_error {
     ($type:ty) => {
@@ -150,6 +151,19 @@ impl HasError for kvrpcpb::PessimisticLockResponse {
 impl HasError for kvrpcpb::PessimisticRollbackResponse {
     fn error(&mut self) -> Option<Error> {
         extract_errors(self.take_errors().into_iter().map(Some))
+    }
+}
+
+// TODO: usually it's just called "error" and not "other_error". of course, we can also implement this manually
+impl HasError for coprv2pb::RawCoprocessorResponse {
+    fn error(&mut self) -> Option<Error> {
+        if self.get_other_error().is_empty() {
+            None
+        } else {
+            Some(Error::KvError {
+                message: self.take_other_error(),
+            })
+        }
     }
 }
 
